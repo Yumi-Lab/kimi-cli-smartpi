@@ -102,7 +102,7 @@ interpreted code, so it is stable for heavy multi-turn agentic tasks.
 Full details (the PyPI-vs-installer story, the httptools pitfall, thermal
 measurements): [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
 
-## Target hardware
+## Target hardware & measured performance
 
 Tested on a Yumi SmartPad (Allwinner H3, 4× Cortex-A7 @ 1.2 GHz, 1 GB RAM,
 Debian 13 trixie armhf, Python 3.13). Any armv7l SBC with ≥ 1 GB RAM should work.
@@ -113,11 +113,17 @@ CLI start on top. First install compiles Pillow (a few minutes on the H3) —
 4 cores by default, `KIMI_BUILD_CPUS=0,1` on a fanless board. `earlyoom` is
 installed as a memory safety net.
 
-## Sister projects (same pads, same method)
+## Sister projects (same board, other CLIs)
 
-- [claude-code-smartpi](https://github.com/Yumi-Lab/claude-code-smartpi) — official Claude Code CLI, native (pinned npm 2.1.112)
-- [grok-cli-smartpi](https://github.com/Yumi-Lab/grok-cli-smartpi) — official xAI Grok CLI, QEMU 64-on-32 emulation
-- [vibe-cli-smartpi](https://github.com/Yumi-Lab/vibe-cli-smartpi) — official Mistral Vibe CLI, native Python via uv (same method as Kimi)
+- [grok-cli-smartpi](https://github.com/Yumi-Lab/grok-cli-smartpi) — official xAI
+  Grok CLI, via QEMU 64-on-32 emulation of the static Rust binary.
+- [claude-code-smartpi](https://github.com/Yumi-Lab/claude-code-smartpi) — official
+  Anthropic Claude Code, native (pinned to the last pure-JS npm release).
+- [vibe-cli-smartpi](https://github.com/Yumi-Lab/vibe-cli-smartpi) — official Mistral
+  Vibe CLI, native Python via uv.
+
+All four are driven together by the [Yumi AI
+Gateway](https://github.com/Yumi-Lab/yumi-ai-gateway).
 
 ## Licensing
 

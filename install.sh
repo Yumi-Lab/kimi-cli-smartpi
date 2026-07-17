@@ -7,8 +7,10 @@
 # This script installs:
 #   uv                      Astral standalone installer (if missing) → ~/.local/bin/uv
 #   kimi-cli (PyPI wheel)   installed as a uv tool → ~/.local/bin/kimi
+#   ~/.local/bin/kimi       runtime wrapper (all 4 cores + nice, KIMI_CPUS to throttle)
 #   armhf build deps        python3-dev gcc libffi-dev pkg-config libjpeg-dev zlib1g-dev
 #                           (Pillow compiles from source on armv7 — no wheel)
+#   ~/.local/bin on PATH    (uv does NOT add it to login shells)
 #   earlyoom                anti-freeze memory safety net (1 GB RAM + SD swap)
 #
 # Why the PyPI path and not the official installer: `code.kimi.com/install.sh`
@@ -91,6 +93,20 @@ EOF
 chmod +x "$WRAP"
 log "kimi runtime wrapper installed (KIMI_CPUS default 0,1,2,3)."
 
+# --- 3c. PATH fix -----------------------------------------------------------
+# uv drops kimi into ~/.local/bin but does NOT add it to the PATH of login shells
+# → `kimi: command not found` after a reconnect. Add it to the shell rc files if
+# it isn't there already (idempotent — same fix as vibe-cli-smartpi).
+add_path_line() {
+  local rc="$1"
+  [ -e "$rc" ] || { [ "$rc" = "$HOME/.profile" ] || return 0; }  # create ~/.profile if missing
+  grep -qsF '.local/bin' "$rc" 2>/dev/null && return 0
+  printf '\n# Added by kimi-cli-smartpi: uv and kimi live here\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
+  log "PATH: added ~/.local/bin to $(basename "$rc")"
+}
+add_path_line "$HOME/.bashrc"
+add_path_line "$HOME/.profile"
+
 # --- 4. Anti-freeze safety net ----------------------------------------------
 # Kills the largest process before memory exhaustion (1 GB RAM + SD-card swap =
 # full machine freeze before the kernel OOM killer reacts).
@@ -123,8 +139,9 @@ Usage:
     KIMI_CPUS=0,1 kimi …       limit the running agent to 2 cores (default: all 4)
 
 Note:
-    ~/.local/bin must be on your PATH. uv adds it to your shell profile; open a
-    new shell, or run:  export PATH="$HOME/.local/bin:$PATH"
+    This installer added ~/.local/bin to your PATH (~/.bashrc, ~/.profile). If
+    `kimi` is "command not found" after reconnecting, open a new shell or run:
+    . ~/.profile
 
 DO NOT:
     re-run `uv tool install kimi-cli` over an existing install (it fails on
