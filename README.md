@@ -42,9 +42,21 @@ are stored in `~/.kimi/`.
 | `kimi --quiet -p "task"` | One-shot, non-interactive, final answer only (`--print --output-format text --final-message-only`) |
 | `kimi login` | Sign in with a Kimi account (OAuth or API key) |
 | `kimi --version` | Sanity check (~1 s) |
+| `KIMI_CPUS=0,1 kimi …` | Limit the running agent to 2 cores (default: all 4) |
 
 `~/.local/bin` must be on your `PATH`. The uv installer adds it to your shell
 profile; open a new shell or run `export PATH="$HOME/.local/bin:$PATH"`.
+
+**Two core knobs** (both default to all 4 cores; the Yumi build bench adds a fan
+for heavy jobs, so lower these only on a bare fanless board):
+
+- `KIMI_BUILD_CPUS` — cores for the one-time **compile** at install
+  (`KIMI_BUILD_CPUS=0,1 curl … | bash`).
+- `KIMI_CPUS` — cores for the **running agent** at launch
+  (`KIMI_CPUS=0,1 kimi …`), the runtime twin of `GROK_CPUS` on
+  [grok-cli-smartpi](https://github.com/Yumi-Lab/grok-cli-smartpi). Installed as a
+  small wrapper over `~/.local/bin/kimi`; after `uv tool upgrade kimi-cli`, re-run
+  `install.sh` to restore it.
 
 ⚠️ **Never re-run `uv tool install kimi-cli` over an existing install** — it fails
 on `httptools` (a distutils build with no metadata to reconcile). To update:

@@ -54,16 +54,36 @@ fi
 # --- 3. kimi-cli — idempotent ------------------------------------------------
 # IMPORTANT: re-running `uv tool install kimi-cli` over an existing install
 # fails on httptools (a distutils build with no metadata uv can reconcile).
-# So: skip entirely if kimi is already there. Updating = `uv tool upgrade`.
-if command -v kimi >/dev/null 2>&1; then
-  log "kimi already installed ($(kimi --version 2>/dev/null | head -1)) — skipping."
-  log "To update it later:  uv tool upgrade kimi-cli"
+# So: skip the install if the uv tool venv is already there (we key the check on
+# the venv binary, NOT on ~/.local/bin/kimi, which step 3b turns into a wrapper).
+# Updating = `uv tool upgrade kimi-cli`.
+KIMI_TOOL_BIN="$HOME/.local/share/uv/tools/kimi-cli/bin/kimi"
+if [ -x "$KIMI_TOOL_BIN" ]; then
+  log "kimi-cli already installed ($("$KIMI_TOOL_BIN" --version 2>/dev/null | head -1)) — skipping."
+  log "To update it later:  uv tool upgrade kimi-cli  (then re-run this script)"
 else
   log "Installing kimi-cli (PyPI, compiles Pillow on cores ${BUILD_CPUS} — patience on the H3)…"
   $THROTTLE uv tool install kimi-cli \
     || fail "kimi-cli install failed (see output above)."
-  command -v kimi >/dev/null 2>&1 || fail "kimi not found after install (expected ~/.local/bin/kimi)."
+  [ -x "$KIMI_TOOL_BIN" ] || fail "kimi-cli venv not found at $KIMI_TOOL_BIN after install."
 fi
+
+# --- 3b. Runtime core control (KIMI_CPUS) -----------------------------------
+# Replace uv's ~/.local/bin/kimi symlink with a wrapper that pins the running
+# agent to a configurable set of cores — the runtime counterpart of GROK_CPUS on
+# grok-cli-smartpi. Default: all 4 cores. On a fanless board running a heavy local
+# agentic loop, throttle without reinstalling:   KIMI_CPUS=0,1 kimi …
+# The wrapper always calls the real venv binary (never itself → no recursion).
+# NB: `uv tool upgrade kimi-cli` rewrites this symlink, so re-run install.sh after
+# an upgrade to restore the wrapper.
+WRAP="$HOME/.local/bin/kimi"
+cat > "$WRAP" <<EOF
+#!/bin/sh
+# kimi-cli-smartpi runtime wrapper — cores set by KIMI_CPUS (default: all 4).
+exec taskset -c "\${KIMI_CPUS:-0,1,2,3}" nice -n 5 "$KIMI_TOOL_BIN" "\$@"
+EOF
+chmod +x "$WRAP"
+log "kimi runtime wrapper installed (KIMI_CPUS default 0,1,2,3)."
 
 # --- 4. Anti-freeze safety net ----------------------------------------------
 # Kills the largest process before memory exhaustion (1 GB RAM + SD-card swap =
@@ -91,6 +111,8 @@ Usage:
     kimi -p "question"         one-shot, then keep going interactively
     kimi --quiet -p "task"     one-shot, non-interactive, final answer only
     kimi --version             sanity check (~1 s)
+
+    KIMI_CPUS=0,1 kimi …       limit the running agent to 2 cores (default: all 4)
 
 Note:
     ~/.local/bin must be on your PATH. uv adds it to your shell profile; open a

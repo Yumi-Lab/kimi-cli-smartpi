@@ -100,11 +100,16 @@ This is why the one-liner is safe to re-run on an already-equipped pad.
 
 ```
 ~/.local/bin/uv                                     Astral tool manager (installed if missing)
-~/.local/bin/kimi                                   → …/uv/tools/kimi-cli/bin/kimi
-~/.local/bin/kimi-cli                               → …/uv/tools/kimi-cli/bin/kimi-cli
+~/.local/bin/kimi                                   runtime wrapper → taskset -c ${KIMI_CPUS} …/kimi-cli/bin/kimi
+~/.local/bin/kimi-cli                               → …/uv/tools/kimi-cli/bin/kimi-cli (unwrapped)
+~/.local/share/uv/tools/kimi-cli/bin/kimi           the real venv entry point (what the wrapper calls)
 ~/.local/share/uv/tools/kimi-cli/                   isolated tool venv (kimi-cli + deps)
 ~/.kimi/                                             config.toml, sessions, credentials
 ```
+
+The installer keys its idempotency check on the venv binary
+(`…/uv/tools/kimi-cli/bin/kimi`), not on `~/.local/bin/kimi`, precisely because
+that path is turned into the runtime wrapper below.
 
 ## 6. Authentication (Kimi account)
 
@@ -140,8 +145,12 @@ Measured on the SmartPad (Debian 13 trixie armhf, Python 3.13, kimi-cli 1.49.0):
 
 Runtime is light: the heavy lifting (inference) happens on Moonshot's servers,
 so a signed-in `kimi` session does not saturate the SoC the way a local build
-does. Bound any batch workload (`systemd-run --scope -p MemoryMax=600M`,
-`timeout`) and keep an eye on `cat /sys/class/thermal/thermal_zone0/temp`.
+does. Where it *can* spike locally is a long agentic loop with heavy tool use
+(compiling, grepping large trees); for that, `~/.local/bin/kimi` is a thin
+wrapper that pins the agent to `KIMI_CPUS` cores (default all 4) —
+`KIMI_CPUS=0,1 kimi …` is the runtime twin of `GROK_CPUS`. Bound any batch
+workload (`systemd-run --scope -p MemoryMax=600M`, `timeout`) and keep an eye on
+`cat /sys/class/thermal/thermal_zone0/temp`.
 
 ## 8. Dead ends (tested / reasoned)
 
