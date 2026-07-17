@@ -24,14 +24,26 @@ dependencies that compile from source. Sign in with a **Kimi account**
 curl -fsSL https://raw.githubusercontent.com/Yumi-Lab/kimi-cli-smartpi/main/install.sh | bash
 ```
 
-Then sign in with your Kimi account (default: Moonshot's Kimi servers):
+Then authenticate — **two methods**, both work headless (verified on the pad):
+
+**a) OAuth device flow — your Kimi Code plan (no API key).** `kimi login` prints a
+verification URL with a short code:
 
 ```bash
-kimi login
+kimi login          # (add --json to stream the OAuth events as JSON lines)
+# → Verification URL: https://www.kimi.com/code/authorize_device?user_code=XXXX-XXXX
 ```
 
-Follow the prompt (OAuth in a browser on any machine, or an API key). Credentials
-are stored in `~/.kimi/`.
+Open that URL in a browser signed in to your **Kimi (kimi.com/code) account**,
+approve the code — the CLI polls `auth.kimi.com` and finishes by itself (no local
+browser needed on the pad). Credentials are stored in `~/.kimi/`.
+
+**b) API key — Moonshot platform** (pay-as-you-go), via the `KIMI_API_KEY`
+environment variable:
+
+```bash
+export KIMI_API_KEY=sk-...      # keys from https://platform.moonshot.ai (or .cn)
+```
 
 ## Usage
 
@@ -40,7 +52,7 @@ are stored in `~/.kimi/`.
 | `kimi` | **Full interactive agent** — the real official TUI, running natively (pure python) |
 | `kimi -p "question"` | Start from a prompt, then keep going interactively |
 | `kimi --quiet -p "task"` | One-shot, non-interactive, final answer only (`--print --output-format text --final-message-only`) |
-| `kimi login` | Sign in with a Kimi account (OAuth or API key) |
+| `kimi login` | Sign in — OAuth device flow (Kimi Code plan); or set `KIMI_API_KEY` |
 | `kimi --version` | Sanity check (~1 s) |
 | `KIMI_CPUS=0,1 kimi …` | Limit the running agent to 2 cores (default: all 4) |
 
@@ -105,6 +117,7 @@ installed as a memory safety net.
 
 - [claude-code-smartpi](https://github.com/Yumi-Lab/claude-code-smartpi) — official Claude Code CLI, native (pinned npm 2.1.112)
 - [grok-cli-smartpi](https://github.com/Yumi-Lab/grok-cli-smartpi) — official xAI Grok CLI, QEMU 64-on-32 emulation
+- [vibe-cli-smartpi](https://github.com/Yumi-Lab/vibe-cli-smartpi) — official Mistral Vibe CLI, native Python via uv (same method as Kimi)
 
 ## Licensing
 

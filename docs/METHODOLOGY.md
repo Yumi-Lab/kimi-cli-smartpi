@@ -111,17 +111,36 @@ The installer keys its idempotency check on the venv binary
 (`…/uv/tools/kimi-cli/bin/kimi`), not on `~/.local/bin/kimi`, precisely because
 that path is turned into the runtime wrapper below.
 
-## 6. Authentication (Kimi account)
+## 6. Authentication — two methods, both verified
 
+Kimi CLI can authenticate two ways (both tested on the pad on 2026-07-17). Config
+and credentials land in `~/.kimi/`.
+
+### 6a. OAuth device flow — the Kimi Code plan (headless-friendly)
+
+`kimi login` runs a **device-code flow** (like grok's `login --device-auth`), so
+no local browser is needed on the pad. Observed events (`kimi login --json`):
+
+```json
+{"type":"info","message":"Please visit the following URL to finish authorization."}
+{"type":"verification_url","data":{"verification_url":
+  "https://www.kimi.com/code/authorize_device?user_code=XXXX-XXXX","user_code":"XXXX-XXXX"}}
+{"type":"waiting","data":{"error":"authorization_pending"}}
 ```
-kimi login
-```
 
-The default configuration targets Moonshot's own Kimi servers. `kimi login`
-runs the account flow (OAuth in a browser on any machine, or an API key);
-credentials and configuration land in `~/.kimi/`.
+Open the `www.kimi.com/code/authorize_device?user_code=…` URL in a browser signed
+in to your **Kimi Code plan** account, approve — the CLI polls `auth.kimi.com` and
+finishes on its own. `--json` streams the events as JSONL (useful when driving it
+over tmux/SSH). This binds the CLI to your Kimi subscription; the coding API base
+is `https://api.kimi.com/coding/v1`.
 
-Notes from real use:
+### 6b. API key — Moonshot platform (pay-as-you-go)
+
+Set `KIMI_API_KEY` (Moonshot: `https://api.moonshot.ai/v1`, or `.cn` in China).
+No `kimi login` needed. Good for fully non-interactive boards.
+
+### Notes from real use
+
 - A **one-shot** call (`kimi -p "…"` / `kimi --quiet -p "…"`) needs a model to be
   selected. If `default_model` is empty in `~/.kimi/config.toml` and no `-m`
   is passed, the CLI exits with `LLM not set`. After `kimi login`, either set a

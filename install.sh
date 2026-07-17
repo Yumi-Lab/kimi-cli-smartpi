@@ -77,6 +77,12 @@ fi
 # NB: `uv tool upgrade kimi-cli` rewrites this symlink, so re-run install.sh after
 # an upgrade to restore the wrapper.
 WRAP="$HOME/.local/bin/kimi"
+[ -x "$KIMI_TOOL_BIN" ] || fail "real kimi binary missing at $KIMI_TOOL_BIN — cannot build wrapper."
+# CRITICAL: ~/.local/bin/kimi is a SYMLINK to $KIMI_TOOL_BIN. `cat > "$WRAP"`
+# would FOLLOW it and overwrite the real venv binary with a wrapper that points to
+# itself → infinite taskset/nice recursion (a hung `kimi`). `rm -f` removes the
+# link itself (never the target), so we then create a fresh regular file.
+rm -f "$WRAP"
 cat > "$WRAP" <<EOF
 #!/bin/sh
 # kimi-cli-smartpi runtime wrapper — cores set by KIMI_CPUS (default: all 4).
