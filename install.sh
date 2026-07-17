@@ -95,7 +95,9 @@ if command -v apt-get >/dev/null; then
 fi
 
 hash -r 2>/dev/null || true
-log "Check: $(kimi --version 2>/dev/null || echo 'kimi --version failed')"   # ~1 s on the H3
+# `timeout` so the installer never hangs on the check (kimi startup is normally
+# ~1 s on the H3, but a heavily-contended board can stall it).
+log "Check: $(timeout 20 kimi --version 2>/dev/null || echo 'kimi --version did not answer in 20 s — try again on an idle board')"
 
 cat <<'MSG'
 
