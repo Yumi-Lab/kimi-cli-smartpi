@@ -8,10 +8,21 @@
 #   uv                      Astral standalone installer (if missing) → ~/.local/bin/uv
 #   kimi-cli (PyPI wheel)   installed as a uv tool → ~/.local/bin/kimi
 #   ~/.local/bin/kimi       runtime wrapper (all 4 cores + nice, KIMI_CPUS to throttle)
+#   ~/.local/bin/kimi-check-update   update probe (JSON one-liner, OTA contract)
 #   armhf build deps        python3-dev gcc libffi-dev pkg-config libjpeg-dev zlib1g-dev
 #                           (Pillow compiles from source on armv7 — no wheel)
 #   ~/.local/bin on PATH    (uv does NOT add it to login shells)
 #   earlyoom                anti-freeze memory safety net (1 GB RAM + SD swap)
+#
+# OTA contract (shared by every Yumi-Lab/*-smartpi repo):
+#   * re-running this script IS the update: already installed → `uv tool upgrade
+#     kimi-cli` (fast no-op when current — NEVER `uv tool install` over an
+#     existing install, it fails on httptools), then the KIMI_CPUS wrapper is
+#     restored (an upgrade rewrites ~/.local/bin/kimi);
+#   * `kimi-check-update` prints one JSON line {installed, latest,
+#     update_available} — what the Yumi AI Gateway polls for its update badge;
+#   * everything lives under $HOME → no sudo needed after the first install
+#     (apt build deps): the gateway service user updates unprivileged.
 #
 # Why the PyPI path and not the official installer: `code.kimi.com/install.sh`
 # ships no 32-bit build → dead end on armv7l. The `kimi-cli` PyPI distribution is
@@ -36,12 +47,39 @@ export PATH="$HOME/.local/bin:$PATH"   # uv and kimi live here; make them visibl
 BUILD_CPUS="${KIMI_BUILD_CPUS:-0,1,2,3}"
 THROTTLE="taskset -c ${BUILD_CPUS} nice -n 5"
 
+RAW="https://raw.githubusercontent.com/Yumi-Lab/kimi-cli-smartpi/main"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd || true)"
+
+# Fetch a repo file: local copy if run from a clone, otherwise raw GitHub.
+# Target lives under $HOME (user-owned) — no sudo.
+fetch_user() { # $1 repo-relative path, $2 destination
+  if [ -n "$HERE" ] && [ -f "$HERE/$1" ]; then
+    install -m755 "$HERE/$1" "$2"
+  else
+    tmpf=$(mktemp); curl -fsSL "$RAW/$1" -o "$tmpf" && install -m755 "$tmpf" "$2"; rm -f "$tmpf"
+  fi
+}
+
+# apt is possible when: root, passwordless sudo, or an interactive run where
+# sudo can prompt on the tty. The gateway service user (no sudo, no tty) skips
+# apt cleanly — the gateway installer set the build deps up as root.
+can_apt() {
+  command -v apt-get >/dev/null || return 1
+  [ "$(id -u)" -eq 0 ] && return 0
+  sudo -n true 2>/dev/null && return 0
+  [ -t 1 ] && command -v sudo >/dev/null
+}
+
 # --- 1. Build dependencies (Pillow has no armv7 wheel → it compiles) ---------
-log "Installing armhf build dependencies (python3-dev, gcc, libjpeg…)…"
-sudo apt-get update -qq
-sudo apt-get install -y -qq \
-  python3-dev gcc libffi-dev pkg-config libjpeg-dev zlib1g-dev >/dev/null \
-  || warn "Some build deps failed to install — the kimi build may fail below."
+if can_apt; then
+  log "Installing armhf build dependencies (python3-dev, gcc, libjpeg…)…"
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq \
+    python3-dev gcc libffi-dev pkg-config libjpeg-dev zlib1g-dev >/dev/null \
+    || warn "Some build deps failed to install — the kimi build may fail below."
+else
+  warn "apt unavailable (no sudo/tty) — assuming the armhf build deps are already installed."
+fi
 
 # --- 2. uv (Astral) — the Python tool manager that carries kimi --------------
 if command -v uv >/dev/null 2>&1; then
@@ -53,16 +91,17 @@ else
   command -v uv >/dev/null 2>&1 || fail "uv install failed (expected at ~/.local/bin/uv)."
 fi
 
-# --- 3. kimi-cli — idempotent ------------------------------------------------
+# --- 3. kimi-cli — install or UPDATE (re-run = the updater) ------------------
 # IMPORTANT: re-running `uv tool install kimi-cli` over an existing install
 # fails on httptools (a distutils build with no metadata uv can reconcile).
-# So: skip the install if the uv tool venv is already there (we key the check on
-# the venv binary, NOT on ~/.local/bin/kimi, which step 3b turns into a wrapper).
-# Updating = `uv tool upgrade kimi-cli`.
+# So: already installed → `uv tool upgrade kimi-cli` (the safe path; fast no-op
+# when current, and only a real upgrade may recompile Pillow — throttled). The
+# check is keyed on the venv binary, NOT on ~/.local/bin/kimi, which step 3b
+# turns into a wrapper (and which any upgrade rewrites — step 3b restores it).
 KIMI_TOOL_BIN="$HOME/.local/share/uv/tools/kimi-cli/bin/kimi"
 if [ -x "$KIMI_TOOL_BIN" ]; then
-  log "kimi-cli already installed ($("$KIMI_TOOL_BIN" --version 2>/dev/null | head -1)) — skipping."
-  log "To update it later:  uv tool upgrade kimi-cli  (then re-run this script)"
+  log "kimi-cli already installed ($("$KIMI_TOOL_BIN" --version 2>/dev/null | head -1)) — checking for an upgrade…"
+  $THROTTLE uv tool upgrade kimi-cli || warn "uv tool upgrade failed — keeping the installed version."
 else
   log "Installing kimi-cli (PyPI, compiles Pillow on cores ${BUILD_CPUS} — patience on the H3)…"
   $THROTTLE uv tool install kimi-cli \
@@ -107,10 +146,19 @@ add_path_line() {
 add_path_line "$HOME/.bashrc"
 add_path_line "$HOME/.profile"
 
+# --- 3d. Update probe (OTA contract shared by every *-smartpi repo) ----------
+# One JSON line {installed, latest, update_available} — polled by the gateway.
+if fetch_user bin/kimi-check-update "$HOME/.local/bin/kimi-check-update"; then
+  log "installed kimi-check-update (update probe)"
+else
+  warn "kimi-check-update not installed (non-fatal)."
+fi
+
 # --- 4. Anti-freeze safety net ----------------------------------------------
 # Kills the largest process before memory exhaustion (1 GB RAM + SD-card swap =
-# full machine freeze before the kernel OOM killer reacts).
-if command -v apt-get >/dev/null; then
+# full machine freeze before the kernel OOM killer reacts). Optional — skipped
+# cleanly when apt/sudo is unavailable (unprivileged OTA update).
+if can_apt; then
   sudo apt-get install -y -qq earlyoom >/dev/null 2>&1 \
     && sudo systemctl enable --now earlyoom >/dev/null 2>&1 \
     && log "earlyoom active" || true
@@ -143,7 +191,13 @@ Note:
     `kimi` is "command not found" after reconnecting, open a new shell or run:
     . ~/.profile
 
+Update:
+    kimi-check-update          →  {"installed":…,"latest":…,"update_available":…}
+    re-run install.sh          upgrades kimi-cli and restores the wrapper
+
 DO NOT:
     re-run `uv tool install kimi-cli` over an existing install (it fails on
-    httptools). To update:  uv tool upgrade kimi-cli
+    httptools — install.sh upgrades via `uv tool upgrade`).
+    a bare `uv tool upgrade kimi-cli` either: it rewrites ~/.local/bin/kimi and
+    drops the KIMI_CPUS wrapper — install.sh restores it.
 MSG

@@ -71,9 +71,22 @@ for heavy jobs, so lower these only on a bare fanless board):
   `install.sh` to restore it.
 
 ⚠️ **Never re-run `uv tool install kimi-cli` over an existing install** — it fails
-on `httptools` (a distutils build with no metadata to reconcile). To update:
-`uv tool upgrade kimi-cli`. The installer is idempotent and skips the install if
-`kimi` is already present.
+on `httptools` (a distutils build with no metadata to reconcile). `install.sh`
+knows this: over an existing install it upgrades via `uv tool upgrade kimi-cli`.
+
+## Updating (OTA)
+
+- **Check:** `kimi-check-update` prints one JSON line —
+  `{"cli":"kimi","installed":"1.48.0","latest":"1.49.0","update_available":true}`.
+  This is the probe the [Yumi AI Gateway](https://github.com/Yumi-Lab/yumi-ai-gateway)
+  console polls for its update badge.
+- **Update:** re-run `install.sh` — that IS the updater: already installed →
+  `uv tool upgrade kimi-cli` (fast no-op when current, throttled compile if a
+  new version rebuilds Pillow), then the `KIMI_CPUS` wrapper is restored.
+- ⚠️ **Never a bare `uv tool upgrade kimi-cli`** either: it rewrites
+  `~/.local/bin/kimi` and drops the wrapper — `install.sh` restores it.
+- **Privileges:** everything lives under `$HOME` — no sudo needed after the
+  first install (apt build deps): the gateway service user updates unprivileged.
 
 ## How it works
 

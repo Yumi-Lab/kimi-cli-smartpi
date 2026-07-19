@@ -1,0 +1,32 @@
+#!/bin/sh
+# kimi-check-update — one JSON line: installed vs newest Kimi CLI version.
+#   {"cli":"kimi","installed":"0.30.1","latest":"0.31.0","update_available":true}
+#
+# Contract shared by every Yumi-Lab/*-smartpi repo (<cli>-check-update): no sudo,
+# no side effects, fast; "latest"/"installed" are null when unknown (offline,
+# not installed). The Yumi AI Gateway polls this to light its update badge, then
+# re-runs install.sh to actually update (which upgrades via `uv tool upgrade
+# kimi-cli` — NEVER `uv tool install` over an existing install: httptools).
+#
+# Installed source of truth: the uv tool venv dist-info (instant). Fallback:
+# `kimi --version` (~1 s on the H3).
+
+installed=""
+for d in "$HOME"/.local/share/uv/tools/kimi-cli/lib/python*/site-packages/kimi_cli-*.dist-info; do
+  [ -d "$d" ] || continue
+  installed="$(basename "$d" | sed -E 's/^kimi_cli-([0-9][0-9a-zA-Z.]*)\.dist-info$/\1/')"
+done
+if [ -z "$installed" ] && command -v kimi >/dev/null 2>&1; then
+  installed="$(timeout 20 kimi --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+fi
+
+latest="$(curl -fsSL --max-time 10 https://pypi.org/pypi/kimi-cli/json 2>/dev/null \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])' 2>/dev/null)"
+case "$latest" in *[!0-9a-zA-Z.]*|"") latest="" ;; esac
+
+up=false
+[ -n "$installed" ] && [ -n "$latest" ] && [ "$installed" != "$latest" ] && up=true
+
+j() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf 'null'; fi; }
+printf '{"cli":"kimi","installed":%s,"latest":%s,"update_available":%s}\n' \
+  "$(j "$installed")" "$(j "$latest")" "$up"
