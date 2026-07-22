@@ -128,6 +128,9 @@ installed as a memory safety net.
 
 ## Sister projects (same board, other CLIs)
 
+- [kimi-code-smartpi](https://github.com/Yumi-Lab/kimi-code-smartpi) — Moonshot's
+  TypeScript **successor** to this CLI, native via npm + Node 22 (the two coexist:
+  `kimi` here, `kimi-code` there).
 - [grok-cli-smartpi](https://github.com/Yumi-Lab/grok-cli-smartpi) — official xAI
   Grok CLI, via QEMU 64-on-32 emulation of the static Rust binary.
 - [claude-code-smartpi](https://github.com/Yumi-Lab/claude-code-smartpi) — official
@@ -135,7 +138,7 @@ installed as a memory safety net.
 - [vibe-cli-smartpi](https://github.com/Yumi-Lab/vibe-cli-smartpi) — official Mistral
   Vibe CLI, native Python via uv.
 
-All four are driven together by the [Yumi AI
+All five are driven together by the [Yumi AI
 Gateway](https://github.com/Yumi-Lab/yumi-ai-gateway).
 
 ## Licensing
