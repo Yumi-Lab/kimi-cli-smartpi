@@ -98,13 +98,19 @@ fi
 # when current, and only a real upgrade may recompile Pillow — throttled). The
 # check is keyed on the venv binary, NOT on ~/.local/bin/kimi, which step 3b
 # turns into a wrapper (and which any upgrade rewrites — step 3b restores it).
+# Prefer Yumi's pre-built armv7l wheels (Pillow & friends) over compiling on the
+# board: turns a ~25 min install into a download. Falls back to source if a wheel
+# is missing. See github.com/Yumi-Lab/smartpi-wheels.
+WHEELS="${KIMI_WHEELS:-https://raw.githubusercontent.com/Yumi-Lab/smartpi-wheels/main/index.html}"
+export UV_FIND_LINKS="$WHEELS"
+
 KIMI_TOOL_BIN="$HOME/.local/share/uv/tools/kimi-cli/bin/kimi"
 if [ -x "$KIMI_TOOL_BIN" ]; then
   log "kimi-cli already installed ($("$KIMI_TOOL_BIN" --version 2>/dev/null | head -1)) — checking for an upgrade…"
   $THROTTLE uv tool upgrade kimi-cli || warn "uv tool upgrade failed — keeping the installed version."
 else
   log "Installing kimi-cli (PyPI, compiles Pillow on cores ${BUILD_CPUS} — patience on the H3)…"
-  $THROTTLE uv tool install kimi-cli \
+  $THROTTLE uv tool install kimi-cli --find-links "$WHEELS" \
     || fail "kimi-cli install failed (see output above)."
   [ -x "$KIMI_TOOL_BIN" ] || fail "kimi-cli venv not found at $KIMI_TOOL_BIN after install."
 fi
